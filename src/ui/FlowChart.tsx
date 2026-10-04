@@ -257,7 +257,7 @@ function RecipeNode({ data }: NodeProps<RecipeFlowNode>) {
 
       <p className="flow-node__head">
         <ItemIcon id={mainItem} name={itemName(mainItem)} size={NODE_METRICS.iconSize} />
-        <span className="flow-node__headname">{itemName(mainItem)}</span><span className="flow-node__edit">{P.edit}</span>
+        <span className="flow-node__headname">{itemName(mainItem)}</span>
       </p>
       {/* 代替レシピはハードドライブのアイコンを名前の先頭に置く。
           1行目が狭くなるぶんは flow-layout.ts の titleLeadingWidth が高さに織り込む */}

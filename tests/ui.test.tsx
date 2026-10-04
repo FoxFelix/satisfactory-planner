@@ -948,7 +948,7 @@ describe('結果テーブル', () => {
     const text = container.textContent ?? ''
     expect(text).toContain('鉄鉱石')
     expect(text).toContain('採鉱機 Mk.3')
-    expect(text).toContain('高純度')
+    expect(text).toContain('通常')
     expect(text).toContain('0.1%') // 90 / 92,100
     expect(container.querySelector('.table-scroll > table.table')).not.toBeNull()
   })

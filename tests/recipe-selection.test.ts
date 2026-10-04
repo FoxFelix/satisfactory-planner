@@ -5,6 +5,7 @@ import { buildPlanGraph } from '../src/plan/graph.ts'
 import { cancelPendingSolve, usePlanner } from '../src/store/planner.ts'
 import { layoutPlanGraph, resourcePortId, resourcePortY } from '../src/ui/flow-layout.ts'
 import { outputRate } from '../src/ui/RecipePickerPage.tsx'
+import { recipesForItem } from '../src/plan/recipe-selection.ts'
 
 const item = 'Desc_IronPlate_C'
 const alternate = 'Recipe_Alternate_CoatedIronPlate_C'
@@ -16,6 +17,31 @@ async function initialPlan() {
 afterEach(() => { cancelPendingSolve() })
 
 describe('interactive recipe replacement', () => {
+  it('compares standard recipes and only the alternates enabled in the sidebar', () => {
+    expect(recipesForItem(item, []).map(recipe => recipe.id)).toEqual(['Recipe_IronPlate_C'])
+    expect(recipesForItem(item, [alternate]).map(recipe => recipe.id)).toEqual(expect.arrayContaining(['Recipe_IronPlate_C', alternate]))
+    expect(recipesForItem(item, [alternate]).filter(recipe => recipe.isAlternate).map(recipe => recipe.id)).toEqual([alternate])
+  })
+  it('unchecking an alternate clears its pins so it no longer participates in calculation', async () => {
+    await initialPlan()
+    expect(await usePlanner.getState().replaceRecipe(item, alternate)).toBeNull()
+    usePlanner.getState().setAlternate(alternate, false)
+    cancelPendingSolve()
+    expect(usePlanner.getState().recipeSelections[item]).toBeUndefined()
+    await usePlanner.getState().recompute()
+    const result = usePlanner.getState().result
+    if (result?.status !== 'optimal') throw Error('no solution')
+    expect(result.steps.some(step => step.recipeId === alternate)).toBe(false)
+  })
+  it('disabling all alternates clears alternate pins but preserves standard pins', () => {
+    usePlanner.getState().applyPlan({ ...defaultPlanInput(),
+      recipeSelections: { [item]: alternate, Desc_IronIngot_C: 'Recipe_IngotIron_C' },
+      enabledAlternates: { [alternate]: true },
+    })
+    usePlanner.getState().setAllAlternates(false)
+    cancelPendingSolve()
+    expect(usePlanner.getState().recipeSelections).toEqual({ Desc_IronIngot_C: 'Recipe_IngotIron_C' })
+  })
   it('selects an alternate even when disabled and rebalances inputs while preserving the target', async () => {
     await initialPlan()
     const before = usePlanner.getState().result

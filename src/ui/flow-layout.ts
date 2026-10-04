@@ -139,7 +139,7 @@ export const NODE_METRICS = {
   ioRowLine: 32,
   recipeWidth: 560,
   sourceWidth: 240,
-  outputWidth: 310,
+  outputWidth: 240,
 } as const
 
 /** ノード1行ぶんの見た目（テストが「潰れていないか」を見るのに使う）。 */

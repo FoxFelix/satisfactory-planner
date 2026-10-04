@@ -21,7 +21,8 @@ export function RecipePickerPage({ node, onClose }: { node: RecipeGraphNode; onC
   const replaceRecipe = usePlanner((state) => state.replaceRecipe)
   const clearSelection = usePlanner((state) => state.clearRecipeSelection)
   const selections = usePlanner((state) => state.recipeSelections)
-  const candidates = recipesForItem(item).sort((a, b) => outputRate(b, item) - outputRate(a, item))
+  const enabledAlternates = usePlanner((state) => state.enabledAlternates)
+  const candidates = recipesForItem(item, Object.keys(enabledAlternates)).sort((a, b) => outputRate(b, item) - outputRate(a, item))
 
   useEffect(() => { const element = dialog.current; element?.showModal(); return () => element?.close() }, [])
 
@@ -96,7 +97,6 @@ function RecipeGroup({ title, recipes, selected, item, pending, onChoose }: {
         <h4>{displayName(recipe)}</h4><span className="recipe-choice__type">{recipe.isAlternate ? P.alternate : P.standard}</span>{recipe.id === selected && <span className="recipe-choice__badge">{P.current}</span>}</div>
       <p className="recipe-choice__machine"><ItemIcon id={recipe.producedIn} name={displayName(recipe.producedIn)} size={20} />
         {displayName(recipe.producedIn)} · {recipe.durationSec} {P.cycle}</p>
-      <p className="recipe-choice__yield">{fmtRate(outputRate(recipe, item))}<span>{itemUnit(item)} · {P.single}</span></p>
       <div className="recipe-choice__io"><div><h5>{P.inputs}</h5><Amounts amounts={recipe.ingredients} duration={recipe.durationSec} /></div>
         <div><h5>{P.outputs}</h5><Amounts amounts={recipe.products} duration={recipe.durationSec} /></div></div>
       <p className="recipe-choice__action">{pending === recipe.id ? P.busy : recipe.id === selected ? P.useCurrent : P.choose}</p>

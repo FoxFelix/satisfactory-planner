@@ -1,3 +1,6 @@
+import { normalizeExtractionOverrides } from '../solver/extraction.ts'
+import { materializeExtractionNodes } from '../plan/extraction-nodes.ts'
+import type { ExtractionOverrides, ResourceExtractionOverride } from '../solver/extraction.ts'
 /**
  * 画面の状態（入力・解）を持つストア。
  *
@@ -6,12 +9,13 @@
  * 実行IDで古い結果を捨てる。
  */
 import { create } from 'zustand'
-import { selectedRecipeIds } from '../plan/recipe-selection.ts'
 import { getActiveLocale } from '../i18n/index.ts'
-import { recipePickerText } from '../i18n/recipe-picker.ts'
+import { sidebarSettingsText } from '../i18n/sidebar-settings.ts'
+import { conflictsWithRawOnly, convertibleRawResourceIds, selectedRecipeIds } from '../plan/recipe-selection.ts'
 
 import { belts, generators, pipes, recipes } from '../data/index.ts'
 import type { Generator } from '../data/types.ts'
+import type { ResourcePurity } from '../data/map-limits.ts'
 import { DEFAULT_RESOURCE_LIMITS } from '../data/map-limits.ts'
 import type { ExcelExportInput } from '../export/excel.ts'
 // クロック / Somersloop の既定値と丸めは保存形式と共有する（store → serialize の一方向）
@@ -141,6 +145,8 @@ export type PlannerState = {
   /** 既に持っているアイテム（コスト0で投入できる） */
   inputs: InputEntry[]
   /** 有効にした代替レシピID */
+  rawOnlyResources: Record<string, true>
+  setRawOnlyResource: (item: string, enabled: boolean) => void
   recipeSelections: Record<string, string>
   enabledAlternates: Record<string, true>
   /** 原料上限の上書き（未指定の原料はマップ上限のまま）。null = 無制限 */
@@ -148,6 +154,9 @@ export type PlannerState = {
   objective: ObjectivePresetId
   /** 固体ノードに置く採掘機 */
   minerId: string
+  extractionOverrides: ExtractionOverrides
+  setResourceExtraction: (item: string, value: ResourceExtractionOverride | undefined) => void
+  extractionPurity: ResourcePurity
   /**
    * 製造建物のクロック上限（1 = 100%）。LP は変わらず、建てる台数と電力の後処理が変わる。
    */
@@ -217,6 +226,7 @@ export type PlannerState = {
   resetLimits: () => void
   setObjective: (id: ObjectivePresetId) => void
   setMinerId: (id: string) => void
+  setExtractionPurity: (purity: ResourcePurity) => void
   /** 製造クロック上限（1 = 100%）。有効範囲に丸めて反映する */
   setMaxClock: (clock: number) => void
   /** 採掘クロック（1 = 100%） */
@@ -373,7 +383,7 @@ export function toSolveInput(state: PlannerState): SolveInput {
       .filter((t) => t.item && t.ratePerMin > 0 && t.mode !== 'max')
       .map((t) => ({ item: t.item, ratePerMin: t.ratePerMin })),
     ...(maximize === undefined ? {} : { maximize }),
-    enabledRecipes: selectedRecipeIds([...baseRecipeIds, ...Object.keys(state.enabledAlternates)], state.recipeSelections),
+    enabledRecipes: selectedRecipeIds([...baseRecipeIds, ...Object.keys(state.enabledAlternates)], state.recipeSelections, Object.keys(state.rawOnlyResources)),
     resourceLimits: state.limitOverrides,
     inputs,
     weights: preset.weights,
@@ -427,10 +437,13 @@ export const usePlanner = create<PlannerState>((set, get) => {
     targets: [],
     inputs: [],
     recipeSelections: {},
+    rawOnlyResources: {},
     enabledAlternates: {},
     limitOverrides: {},
     objective: 'resources',
     minerId: DEFAULT_MINER_ID,
+    extractionOverrides: {},
+    extractionPurity: 'normal',
     maxClock: DEFAULT_MAX_CLOCK,
     extractionClock: DEFAULT_EXTRACTION_CLOCK,
     somersloops: DEFAULT_SOMERSLOOPS,
@@ -487,12 +500,24 @@ export const usePlanner = create<PlannerState>((set, get) => {
 
     removeInput: (key) => change({ inputs: get().inputs.filter((i) => i.key !== key) }),
 
+    setRawOnlyResource: (item, enabled) => {
+      if (!convertibleRawResourceIds.has(item)) return
+      const rawOnlyResources = { ...get().rawOnlyResources }
+      if (enabled) rawOnlyResources[item] = true
+      else delete rawOnlyResources[item]
+      const recipeSelections = Object.fromEntries(Object.entries(get().recipeSelections).filter(([, id]) => {
+        const recipe = recipes.find(recipe => recipe.id === id)
+        return recipe && !conflictsWithRawOnly(recipe, Object.keys(rawOnlyResources))
+      }))
+      change({ rawOnlyResources, recipeSelections })
+    },
+
     replaceRecipe: async (item, recipeId) => {
-      const P = recipePickerText(getActiveLocale())
       const recipe = recipes.find((r) => r.id === recipeId)
-      if (!recipe?.products.some((p) => p.item === item)) return P.invalidRecipe
+      if (!recipe?.products.some((p) => p.item === item)) return '所選配方無法製造這個物品。'
       const state = get()
-      if (state.status === 'solving') return P.planBusy
+      if (conflictsWithRawOnly(recipe, Object.keys(state.rawOnlyResources))) return sidebarSettingsText(getActiveLocale()).conflict
+      if (state.status === 'solving') return '計畫正在更新，請稍後再選擇配方。'
       cancelPendingSolve()
       const candidate = { ...state, recipeSelections: { ...state.recipeSelections, [item]: recipeId } }
       const input = toSolveInput(candidate)
@@ -500,13 +525,15 @@ export const usePlanner = create<PlannerState>((set, get) => {
       const startedAt = performance.now()
       try {
         const result = await solveProduction(input)
-        if (id !== runId || get() !== state) return P.planChanged
-        if (result.status !== 'optimal') return `${P.unavailable}${result.message}`
-        if (!result.steps.some((step) => step.recipeId === recipeId)) return P.unused
+        if (id !== runId || get() !== state) return '計畫已變更，請重新選擇配方。'
+        if (result.status !== 'optimal') return `無法使用此配方：${result.message}`
+        if (!result.steps.some((step) => step.recipeId === recipeId)) return '此配方未能加入目前產線；請檢查外部輸入或其他已指定配方。'
         const enabledAlternates = { ...state.enabledAlternates }
         if (recipe.isAlternate) enabledAlternates[recipeId] = true
-        set({ recipeSelections: candidate.recipeSelections, enabledAlternates, result,
-          extraction: planExtraction(result, { minerId: state.minerId, clock: state.extractionClock }),
+        const options = { minerId: state.minerId, clock: state.extractionClock, purity: state.extractionPurity, overrides: state.extractionOverrides, beltId: state.beltId, pipeId: state.pipeId }
+        const extractionOverrides = materializeExtractionNodes(result, options)
+        set({ recipeSelections: candidate.recipeSelections, enabledAlternates, result, extractionOverrides,
+          extraction: planExtraction(result, { ...options, overrides: extractionOverrides }),
           loadedTemplateId: null, status: 'done', error: null, elapsedMs: performance.now() - startedAt })
         return null
       } catch (error) {
@@ -524,7 +551,10 @@ export const usePlanner = create<PlannerState>((set, get) => {
       const next = { ...get().enabledAlternates }
       if (enabled) next[recipeId] = true
       else delete next[recipeId]
-      change({ enabledAlternates: next })
+      const recipeSelections = enabled ? get().recipeSelections : Object.fromEntries(
+        Object.entries(get().recipeSelections).filter(([, id]) => id !== recipeId),
+      )
+      change({ enabledAlternates: next, recipeSelections })
     },
 
     setAllAlternates: (enabled) =>
@@ -532,6 +562,9 @@ export const usePlanner = create<PlannerState>((set, get) => {
         enabledAlternates: enabled
           ? Object.fromEntries(alternateRecipes.map((r) => [r.id, true as const]))
           : {},
+        recipeSelections: enabled ? get().recipeSelections : Object.fromEntries(
+          Object.entries(get().recipeSelections).filter(([, id]) => !recipes.find(recipe => recipe.id === id)?.isAlternate),
+        ),
       }),
 
     setLimitOverride: (item, limit) => {
@@ -546,6 +579,17 @@ export const usePlanner = create<PlannerState>((set, get) => {
     setObjective: (id) => change({ objective: id }),
 
     setMinerId: (id) => change({ minerId: id }),
+    setResourceExtraction: (item, value) => {
+      const overrides = { ...get().extractionOverrides }
+      if (value === undefined) delete overrides[item]
+      else {
+        const normalized = normalizeExtractionOverrides({ [item]: value })[item]
+        if (!normalized) return
+        overrides[item] = normalized
+      }
+      change({ extractionOverrides: overrides })
+    },
+    setExtractionPurity: (purity) => change({ extractionPurity: purity }),
 
     setMaxClock: (clock) => change({ maxClock: clampMaxClock(clock) }),
 
@@ -593,20 +637,23 @@ export const usePlanner = create<PlannerState>((set, get) => {
       change({ zeroSurplusByproducts: next })
     },
 
-    // プラン名・搬送手段は解に影響しないので再計算しない（set のまま）
+    // プラン名は再計算不要。搬送手段は単機採掘出力に影響するため再計算する。
     setPlanName: (name) => set({ planName: name }),
-    setBeltId: (id) => set({ beltId: id }),
-    setPipeId: (id) => set({ pipeId: id }),
+    setBeltId: (id) => change({ beltId: id }),
+    setPipeId: (id) => change({ pipeId: id }),
 
     applyPlan: (input, templateId) =>
       change({
         targets: mergeTargetEntries(input.targets),
         inputs: mergeInputEntries(input.inputs ?? []),
         recipeSelections: { ...(input.recipeSelections ?? {}) },
+        rawOnlyResources: { ...(input.rawOnlyResources ?? {}) },
         enabledAlternates: { ...input.enabledAlternates },
         limitOverrides: { ...input.limitOverrides },
         objective: input.objective,
         minerId: input.minerId,
+        extractionOverrides: normalizeExtractionOverrides(input.extractionOverrides),
+        extractionPurity: input.extractionPurity ?? 'normal',
         maxClock: clampMaxClock(input.maxClock),
         extractionClock: clampExtractionClock(input.extractionClock),
         somersloops: clampSomersloops(input.somersloops),
@@ -640,17 +687,15 @@ export const usePlanner = create<PlannerState>((set, get) => {
       try {
         const result = await solveProduction(input)
         if (id !== runId) return // 新しい入力が来ているので捨てる
-        const extraction =
-          result.status === 'optimal'
-            ? planExtraction(result, {
-                minerId: get().minerId,
-                clock: get().extractionClock,
-              })
-            : null
+        const options = { minerId: get().minerId, clock: get().extractionClock, purity: get().extractionPurity,
+          overrides: get().extractionOverrides, beltId: get().beltId, pipeId: get().pipeId }
+        const extractionOverrides = result.status === 'optimal' ? materializeExtractionNodes(result, options) : get().extractionOverrides
+        const extraction = result.status === 'optimal' ? planExtraction(result, { ...options, overrides: extractionOverrides }) : null
         set({
           status: 'done',
           result,
           extraction,
+          extractionOverrides,
           error: null,
           elapsedMs: performance.now() - startedAt,
         })

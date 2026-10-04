@@ -486,3 +486,11 @@ GPL の対象外です（出典と扱いは `public/icons/SOURCES.md` を参照�
 - 計算結果はゲームデータに基づく理論値です。実際のゲーム内の挙動・アップデートによる仕様変更との
   差異について、作者は一切の責任を負いません
 - 非商用・無保証で提供しています
+
+## Demand, installed capacity, and extraction settings
+
+Production targets determine planned ingredient requirements. Integer installed building counts and configured clocks determine separate output/consumption limits; unused capacity does not expand upstream demand. For example, 21 iron plates/min at 250% needs one constructor, 31.5 iron ingots/min, and has an output limit of 50 plates/min. Balance and Excel show planned rates alongside installed capacity limits.
+
+Resource rows expand extraction settings directly inside the table. Each editable node group represents one extractor with its own equipment, purity, and clock. Adding/removing groups changes installed counts; insufficient supply is reported without automatically adding nodes. Restore defaults rebuilds groups from current sidebar defaults and demand. Mixed configurations are persisted in saved/shared plans; legacy grouped counts are expanded to individual machines. Resource-well pressurizer counts remain estimates based on average satellite counts.
+
+Recipe comparison includes standard recipes and only sidebar-enabled alternates, using one machine at 100% without Somersloops. Raw-only sourcing excludes recipes whose main product is the selected raw resource while retaining recoverable byproducts. Sidebar sections support expand/collapse all and retain their state across reloads.

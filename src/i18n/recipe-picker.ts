@@ -1,11 +1,10 @@
 const zh = {
-  invalidRecipe: '所選配方無法製造這個物品。', planBusy: '計畫正在更新，請稍後再選擇配方。', planChanged: '計畫已變更，請重新選擇配方。', unavailable: '無法使用此配方：', unused: '此配方未能加入目前產線；請檢查外部輸入或其他已指定配方。',
   singleMaximum: '單台最大（100%）', maximumHelp: '目前使用配方的單台機器基準產量，不含超頻與薩莫斯環增幅。多個配方同時生產時顯示其中最高值。',
   expand: '展開流程圖 ⛶', collapse: '返回標準檢視 ×',
   help: '點擊配方節點可比較與替換配方；箭頭對齊各資源列。', open: '比較與替換配方：',
   edit: '比較／替換配方 ↗', breadcrumb: '流程圖 ／ 配方比較', back: '返回流程圖 ×',
   intro: '單台機器 · 100% 時脈 · 無 Somersloop。所有輸入與輸出均為每分鐘數量。',
-  product: '比較產物', effect: '選擇後，計畫中這個物品的生產配方會固定為你的選擇，並重新計算整條產線。替代配方不需要先勾選啟用。',
+  product: '比較產物', effect: '選擇後，計畫中這個物品的生產配方會固定為你的選擇，並重新計算整條產線。此處顯示主配方與側邊欄已勾選的替代配方。',
   pinned: '已指定：', auto: '恢復自動選配方', pending: '正在重新計算產線…', retained: '原方案已保留。',
   available: '可用配方', standard: '主配方', alternate: '替代配方', generator: '發電節點',
   generatorHelp: '此節點使用燃料發電，沒有製造用主配方或替代配方。燃料可在「發電規劃」設定中切換。',
@@ -14,13 +13,12 @@ const zh = {
   busy: '計算中…', useCurrent: '使用目前配方', choose: '選擇此配方 →',
 }
 const en: typeof zh = {
-  invalidRecipe: 'This recipe cannot produce the selected item.', planBusy: 'The plan is updating. Please choose a recipe after it finishes.', planChanged: 'The plan changed. Please select the recipe again.', unavailable: 'Cannot use this recipe: ', unused: 'This recipe was not used in the plan. Check external inputs and other selected recipes.',
   singleMaximum: 'Single-machine max (100%)', maximumHelp: 'Baseline output of one machine using the active recipe, without overclocking or Somersloops. For multiple active recipes, shows the highest rate.',
   expand: 'Expand flow chart ⛶', collapse: 'Return to normal view ×',
   help: 'Click a recipe to compare and replace it. Arrows connect to each resource row.', open: 'Compare and replace recipe: ',
   edit: 'Compare / replace ↗', breadcrumb: 'Flow chart / Recipe comparison', back: 'Back to flow chart ×',
   intro: 'One machine · 100% clock · no Somersloops. All inputs and outputs are shown per minute.',
-  product: 'Compare product', effect: 'Your choice fixes production of this item across the plan and recalculates the entire chain. Alternate recipes are enabled automatically.',
+  product: 'Compare product', effect: 'Your choice fixes production of this item across the plan and recalculates the entire chain. Standard recipes and alternates enabled in the sidebar are shown here.',
   pinned: 'Selected: ', auto: 'Choose automatically', pending: 'Recalculating production…', retained: 'The previous plan was retained.',
   available: 'Available recipes', standard: 'Standard recipes', alternate: 'Alternate recipes', generator: 'Power generation',
   generatorHelp: 'This step consumes fuel to generate power and has no manufacturing recipes. Change fuels in Power generation settings.',
@@ -28,19 +26,4 @@ const en: typeof zh = {
   use: 'Use recipe: ', current: 'Current recipe', cycle: 'sec / cycle', single: 'One machine at 100%',
   busy: 'Calculating…', useCurrent: 'Use current recipe', choose: 'Choose this recipe →',
 }
-const ja: typeof zh = {
-  invalidRecipe: 'このレシピでは選択したアイテムを生産できません。', planBusy: 'プランを更新中です。完了後にレシピを選択してください。', planChanged: 'プランが変更されました。レシピを選び直してください。', unavailable: 'このレシピは使用できません：', unused: 'このレシピは生産ラインに使用されませんでした。既保有アイテムの投入と他の指定レシピを確認してください。',
-  singleMaximum: '1台の最大産出（100%）', maximumHelp: '使用中のレシピで1台を100%稼働させた基準産出量です。オーバークロックとサマースループの増幅は含みません。複数のレシピで生産している場合は最大値を表示します。',
-  expand: 'フローチャートを拡大 ⛶', collapse: '通常表示に戻る ×',
-  help: 'レシピをクリックすると比較・変更できます。矢印は各アイテムの行につながります。', open: 'レシピを比較・変更：',
-  edit: '比較・変更 ↗', breadcrumb: 'フローチャート ／ レシピ比較', back: 'フローチャートに戻る ×',
-  intro: '1台・クロック100%・サマースループなし。投入・産出はすべて毎分の数量です。',
-  product: '比較する産物', effect: '選択すると、このアイテムを生産するレシピをプラン全体で固定し、生産ラインを再計算します。代替レシピは自動で有効になります。',
-  pinned: '指定中：', auto: '自動選択に戻す', pending: '生産ラインを再計算中…', retained: '変更前のプランを保持しました。',
-  available: '利用可能なレシピ', standard: '基本レシピ', alternate: '代替レシピ', generator: '発電ノード',
-  generatorHelp: 'このノードは燃料を消費して発電するため、製造用の基本・代替レシピはありません。燃料は「発電計画」で変更できます。',
-  inputs: '投入 ／ 毎分', outputs: '産出 ／ 毎分', sorted: '件・産出量の多い順', empty: '該当するレシピはありません。',
-  use: 'レシピを使用：', current: '現在のレシピ', cycle: '秒／サイクル', single: '1台・100%',
-  busy: '計算中…', useCurrent: '現在のレシピを使用', choose: 'このレシピを選択 →',
-}
-export const recipePickerText = (locale: string) => locale.startsWith('zh') ? zh : locale === 'ja' ? ja : en
+export const recipePickerText = (locale: string) => locale.startsWith('zh') ? zh : en
