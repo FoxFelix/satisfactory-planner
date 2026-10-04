@@ -6,6 +6,9 @@
  * 実行IDで古い結果を捨てる。
  */
 import { create } from 'zustand'
+import { selectedRecipeIds } from '../plan/recipe-selection.ts'
+import { getActiveLocale } from '../i18n/index.ts'
+import { recipePickerText } from '../i18n/recipe-picker.ts'
 
 import { belts, generators, pipes, recipes } from '../data/index.ts'
 import type { Generator } from '../data/types.ts'
@@ -138,6 +141,7 @@ export type PlannerState = {
   /** 既に持っているアイテム（コスト0で投入できる） */
   inputs: InputEntry[]
   /** 有効にした代替レシピID */
+  recipeSelections: Record<string, string>
   enabledAlternates: Record<string, true>
   /** 原料上限の上書き（未指定の原料はマップ上限のまま）。null = 無制限 */
   limitOverrides: Record<string, number | null>
@@ -205,6 +209,8 @@ export type PlannerState = {
   addInput: (item: string, ratePerMin?: number) => string
   updateInput: (key: string, patch: Partial<Omit<InputEntry, 'key'>>) => void
   removeInput: (key: string) => void
+  replaceRecipe: (item: string, recipeId: string) => Promise<string | null>
+  clearRecipeSelection: (item: string) => void
   setAlternate: (recipeId: string, enabled: boolean) => void
   setAllAlternates: (enabled: boolean) => void
   setLimitOverride: (item: string, limit: number | null | undefined) => void
@@ -367,7 +373,7 @@ export function toSolveInput(state: PlannerState): SolveInput {
       .filter((t) => t.item && t.ratePerMin > 0 && t.mode !== 'max')
       .map((t) => ({ item: t.item, ratePerMin: t.ratePerMin })),
     ...(maximize === undefined ? {} : { maximize }),
-    enabledRecipes: [...baseRecipeIds, ...Object.keys(state.enabledAlternates)],
+    enabledRecipes: selectedRecipeIds([...baseRecipeIds, ...Object.keys(state.enabledAlternates)], state.recipeSelections),
     resourceLimits: state.limitOverrides,
     inputs,
     weights: preset.weights,
@@ -420,6 +426,7 @@ export const usePlanner = create<PlannerState>((set, get) => {
   return {
     targets: [],
     inputs: [],
+    recipeSelections: {},
     enabledAlternates: {},
     limitOverrides: {},
     objective: 'resources',
@@ -479,6 +486,39 @@ export const usePlanner = create<PlannerState>((set, get) => {
       change({ inputs: get().inputs.map((i) => (i.key === key ? { ...i, ...patch } : i)) }),
 
     removeInput: (key) => change({ inputs: get().inputs.filter((i) => i.key !== key) }),
+
+    replaceRecipe: async (item, recipeId) => {
+      const P = recipePickerText(getActiveLocale())
+      const recipe = recipes.find((r) => r.id === recipeId)
+      if (!recipe?.products.some((p) => p.item === item)) return P.invalidRecipe
+      const state = get()
+      if (state.status === 'solving') return P.planBusy
+      cancelPendingSolve()
+      const candidate = { ...state, recipeSelections: { ...state.recipeSelections, [item]: recipeId } }
+      const input = toSolveInput(candidate)
+      const id = ++runId
+      const startedAt = performance.now()
+      try {
+        const result = await solveProduction(input)
+        if (id !== runId || get() !== state) return P.planChanged
+        if (result.status !== 'optimal') return `${P.unavailable}${result.message}`
+        if (!result.steps.some((step) => step.recipeId === recipeId)) return P.unused
+        const enabledAlternates = { ...state.enabledAlternates }
+        if (recipe.isAlternate) enabledAlternates[recipeId] = true
+        set({ recipeSelections: candidate.recipeSelections, enabledAlternates, result,
+          extraction: planExtraction(result, { minerId: state.minerId, clock: state.extractionClock }),
+          loadedTemplateId: null, status: 'done', error: null, elapsedMs: performance.now() - startedAt })
+        return null
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error)
+      }
+    },
+
+    clearRecipeSelection: (item) => {
+      const next = { ...get().recipeSelections }
+      delete next[item]
+      change({ recipeSelections: next })
+    },
 
     setAlternate: (recipeId, enabled) => {
       const next = { ...get().enabledAlternates }
@@ -562,6 +602,7 @@ export const usePlanner = create<PlannerState>((set, get) => {
       change({
         targets: mergeTargetEntries(input.targets),
         inputs: mergeInputEntries(input.inputs ?? []),
+        recipeSelections: { ...(input.recipeSelections ?? {}) },
         enabledAlternates: { ...input.enabledAlternates },
         limitOverrides: { ...input.limitOverrides },
         objective: input.objective,

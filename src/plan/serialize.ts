@@ -82,14 +82,15 @@ export function clampPowerTargetMW(mw: number | undefined): number {
  *       「キーがある＝その配列が選択」「キーが無い＝全燃料許可（v5 以前の互換）」で、
  *       v1〜v5 の保存プラン・共有URLはこれまでどおりの解になる
  * v7 … 「余りを許さない副産物」（z）を追加。空（既定）なら省略するので v1〜v6 もそのまま読める
+ * v8 … Explicit production recipe selections (r). Older plans retain automatic selection.
  */
-export const PLAN_SCHEMA_VERSION = 7
+export const PLAN_SCHEMA_VERSION = 8
 
 /**
  * 読み込めるスキーマ版。**古い版は読めること**（保存済みプラン・共有URLが死なないように）。
  * 未知の新しい版は拒否する（知らないキーを黙って落とすと事故になるため）。
  */
-export const SUPPORTED_SCHEMA_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7]
+export const SUPPORTED_SCHEMA_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8]
 
 /** URL ハッシュのパラメータ名（`#plan=...`） */
 export const PLAN_HASH_PARAM = 'plan'
@@ -141,12 +142,15 @@ export type PlanSnapshot = {
    * 候補は発電機の燃料が出す副産物（`generatorByproductItems()`）だけ
    */
   z?: string[]
+  /** v8: item → explicitly selected production recipe */
+  r?: Record<string, string>
 }
 
 /** 復元して store に流し込む形（TargetEntry の key は store 側で採番する）。 */
 export type PlanInput = {
   targets: { item: string; ratePerMin: number; mode?: TargetMode }[]
   inputs: { item: string; ratePerMin: number }[]
+  recipeSelections?: Record<string, string>
   enabledAlternates: Record<string, true>
   limitOverrides: Record<string, number | null>
   objective: ObjectivePresetId
@@ -177,6 +181,7 @@ export type PlanSource = {
   targets: TargetEntry[]
   /** 既保有アイテム（v1 のデータには無いので省略可。key は保存に使わない） */
   inputs?: readonly Omit<InputEntry, 'key'>[]
+  recipeSelections?: Record<string, string>
   enabledAlternates: Record<string, true>
   limitOverrides: Record<string, number | null>
   objective: ObjectivePresetId
@@ -258,6 +263,7 @@ export function toPlanSnapshot(state: PlanSource): PlanSnapshot {
     .sort()
   return {
     v: PLAN_SCHEMA_VERSION,
+    ...(Object.keys(state.recipeSelections ?? {}).length ? { r: { ...state.recipeSelections } } : {}),
     n: state.planName,
     t: state.targets
       .filter((t) => t.item !== '' && Number.isFinite(t.ratePerMin))
@@ -530,6 +536,15 @@ export function parsePlanSnapshot(raw: unknown): PlanParseResult {
     warnings.push('副産物の設定が不正なので無視しました')
   }
 
+  if (raw.r !== undefined) {
+    if (!isRecord(raw.r)) return { ok: false, error: '指定レシピの形式が不正です' }
+    input.recipeSelections = {}
+    for (const [item, id] of Object.entries(raw.r)) {
+      if (typeof id === 'string' && recipesById.get(id)?.products.some((p) => p.item === item)) {
+        input.recipeSelections[item] = id
+      } else warnings.push(`無効な指定レシピを無視しました：${item}`)
+    }
+  }
   return { ok: true, input, warnings }
 }
 

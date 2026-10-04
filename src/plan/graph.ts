@@ -17,7 +17,7 @@
 import { stepKey } from './aggregate.ts'
 import { enumeratePlanFlows, flowTransport, itemForm, resolveTransportChoice } from './flows.ts'
 import type { TransportChoice } from './flows.ts'
-import { buildingsById, createDisplayName, recipesById } from '../data/index.ts'
+import { buildingsById, createDisplayName, ratePerMin, recipesById } from '../data/index.ts'
 import type { DisplayNameResolver, GameNamePack } from '../data/index.ts'
 import type { ItemRate, PowerRangeMW, Solution, SolutionStep } from '../solver/index.ts'
 
@@ -83,6 +83,8 @@ export type OutputGraphNode = NodeBase & {
   isTarget: boolean
   /** 目標のときの要求レート */
   requestedPerMin?: number
+  /** Highest single-machine output among active producer recipes, at 100% with no amplification. */
+  maxSingleOutputPerMin?: number
 }
 
 export type PlanGraphNode = SourceGraphNode | RecipeGraphNode | OutputGraphNode
@@ -144,6 +146,7 @@ export function buildPlanGraph(solution: Solution, options?: PlanGraphOptions): 
   const producers = new Map<string, Port[]>()
   /** item -> そのアイテムを受け取るノードと量 */
   const consumers = new Map<string, Port[]>()
+  const singleMachineOutputs = new Map<string, number>()
 
   // 1) 原料供給（Excel の物流シートと同じ列挙を使う）
   const flows = enumeratePlanFlows(solution)
@@ -164,6 +167,11 @@ export function buildPlanGraph(solution: Solution, options?: PlanGraphOptions): 
 
   // 3) 生産ステップ
   for (const step of solution.steps) {
+    const recipe = recipesById.get(step.recipeId)
+    for (const product of recipe?.products ?? []) {
+      const rate = ratePerMin(product.amount, recipe!.durationSec)
+      singleMachineOutputs.set(product.item, Math.max(singleMachineOutputs.get(product.item) ?? 0, rate))
+    }
     const id = recipeNodeId(step)
     nodes.push(recipeNode(id, step, displayName))
     for (const flow of step.inputs) {
@@ -193,6 +201,7 @@ export function buildPlanGraph(solution: Solution, options?: PlanGraphOptions): 
       item,
       itemName: displayName(item),
       ratePerMin: leftover,
+      ...(singleMachineOutputs.has(item) ? { maxSingleOutputPerMin: singleMachineOutputs.get(item) } : {}),
       isTarget: target !== undefined,
       ...(target ? { requestedPerMin: target.requestedPerMin } : {}),
     })
