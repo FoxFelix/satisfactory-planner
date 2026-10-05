@@ -126,6 +126,7 @@ export function ResultView({ viewMode = 'normal' }: ResultViewProps) {
         {tab === 'flow' && (
           <Suspense fallback={<p className="hint">{T.flow.loading}</p>}>
             <FlowChart
+              extraction={extraction}
               solution={result}
               beltId={beltId}
               pipeId={pipeId}

@@ -4,13 +4,14 @@ import { resourceExtractionText } from '../i18n/resource-extraction.ts'
 import { usePlanner } from '../store/planner.ts'
 import { resourceExtractorIds, WATER_EXTRACTOR_ID, planExtraction } from '../solver/extraction.ts'
 import { nodesFromExtraction, singleMachineNodes } from '../plan/extraction-nodes.ts'
+import { extractionDisplay } from '../plan/extraction-display.ts'
 import type { CustomExtractionNode, ResourceExtraction } from '../solver/extraction.ts'
 import type { ResourcePurity } from '../data/map-limits.ts'
-import { itemName } from './format.ts'
+import { itemName, fmtRate } from './format.ts'
 import { NumberField } from './NumberField.tsx'
 
-type Props = { item: string; required: number; plan?: ResourceExtraction }
-export function ResourceExtractionEditor({ item, required, plan }: Props) {
+type Props = { item: string; required: number; plan?: ResourceExtraction; draftNodes?: CustomExtractionNode[]; onChange?: (nodes: CustomExtractionNode[] | undefined) => void }
+export function ResourceExtractionEditor({ item, required, plan, draftNodes, onChange }: Props) {
   const { locale } = useLocale()
   const P = resourceExtractionText(locale)
   const config = usePlanner(s => s.extractionOverrides[item])
@@ -24,12 +25,18 @@ export function ResourceExtractionEditor({ item, required, plan }: Props) {
   const defaults = () => nodesFromExtraction(planExtraction({ rawResources: [{ item, ratePerMin: required,
     limitPerMin: null, usageRatio: null }] }, { minerId: globalMiner, purity: globalPurity,
     clock: globalClock, beltId, pipeId }).resources[0]!)
-  const nodes = config?.nodes !== undefined ? singleMachineNodes(config.nodes) : plan ? nodesFromExtraction(plan) : defaults()
+  const nodes = onChange ? draftNodes ?? defaults() : config?.nodes !== undefined ? singleMachineNodes(config.nodes) : plan ? nodesFromExtraction(plan) : defaults()
+  const update = (next: CustomExtractionNode[] | undefined) => onChange ? onChange(next) : setConfig(item, next ? { nodes: next } : undefined)
+  const preview = planExtraction({ rawResources: [{ item, ratePerMin: required, limitPerMin: null, usageRatio: null }] },
+    { minerId: globalMiner, purity: globalPurity, clock: globalClock, beltId, pipeId, overrides: { [item]: { nodes } } }).resources[0]!
+  const available = extractionDisplay(preview).rows.slice()
+  const rowRates = nodes.map(node => {
+    const index = available.findIndex(row => row.extractorId === node.extractorId && row.purity === node.purity && row.clock === node.clock)
+    return index >= 0 ? available.splice(index, 1)[0] : { required: 0, maximum: 0 }
+  })
   const newNode = (): CustomExtractionNode => ({ extractorId: solid ? globalMiner : resourceExtractorIds(item)[0]!,
     purity: globalPurity, clock: globalClock, count: 1 })
-  const patchNode = (index: number, value: Partial<CustomExtractionNode>) => setConfig(item, {
-    nodes: nodes.map((n, i) => i === index ? { ...n, ...value, count: 1 } : n),
-  })
+  const patchNode = (index: number, value: Partial<CustomExtractionNode>) => update(nodes.map((n, i) => i === index ? { ...n, ...value, count: 1 } : n))
   const clockField = (clock: number, set: (v: number) => void) => <label className="field">
     <span>{P.clock}</span><NumberField className="input" min={1} max={250} step={1} value={clock * 100}
       onValueChange={v => set(Math.max(.01, Math.min(2.5, v / 100)))} /></label>
@@ -47,9 +54,10 @@ export function ResourceExtractionEditor({ item, required, plan }: Props) {
             {clockField(node.clock, clock => patchNode(index, { clock }))}
           </div>
           <div className="resource-setting__stats">
-            <button className="button button--small" onClick={() => setConfig(item, { nodes: nodes.filter((_, i) => i !== index) })}>{P.remove}</button></div>
+            <span className="num">{fmtRate(rowRates[index].required)} / {fmtRate(rowRates[index].maximum)}</span>{' '}
+            <button className="button button--small" onClick={() => update(nodes.filter((_, i) => i !== index))}>{P.remove}</button></div>
         </div>)}
-        <button className="button" onClick={() => setConfig(item, { nodes: [...nodes, newNode()] })}>{P.add}</button>
-      <button className="button" onClick={() => setConfig(item, { nodes: defaults() })}>{P.reset}</button>
+        <button className="button" onClick={() => update([...nodes, newNode()])}>{P.add}</button>
+      <button className="button" onClick={() => update(undefined)}>{P.reset}</button>
   </div>
 }

@@ -49,7 +49,7 @@ export const NODE_TYPE = {
   output: 'planOutput',
 } as const
 
-export type SourceFlowNode = Node<{ node: SourceGraphNode }, 'planSource'>
+export type SourceFlowNode = Node<{ node: SourceGraphNode; onOpen?: (node: SourceGraphNode) => void }, 'planSource'>
 export type RecipeFlowNode = Node<{ node: RecipeGraphNode; onOpen?: (node: RecipeGraphNode) => void }, 'planRecipe'>
 export type OutputFlowNode = Node<{ node: OutputGraphNode }, 'planOutput'>
 export type PlanFlowNode = SourceFlowNode | RecipeFlowNode | OutputFlowNode
@@ -269,7 +269,7 @@ export function titleLeadingWidth(node: PlanGraphNode): number {
 /** ノードの横幅（種別ごと）。 */
 export function nodeWidth(node: PlanGraphNode): number {
   if (node.kind === 'recipe') return NODE_METRICS.recipeWidth
-  if (node.kind === 'source') return NODE_METRICS.sourceWidth
+  if (node.kind === 'source') return node.external ? NODE_METRICS.sourceWidth : 460
   return NODE_METRICS.outputWidth
 }
 
@@ -322,8 +322,9 @@ export function nodeRows(node: PlanGraphNode): NodeRow[] {
   if (node.kind === 'output' && node.requestedPerMin !== undefined) {
     rows.push({ id: 'meta:requested', height: m.metaLine, fontSize: m.metaFontSize })
   }
-  if (node.kind === 'output' && node.maxSingleOutputPerMin !== undefined) {
-    rows.push({ id: 'rate:single-max', height: m.rateLine, fontSize: m.metaFontSize })
+  if (node.kind === 'source' && !node.external) {
+    for (let i = 0; i < (node.machines?.length ?? 0); i++) rows.push({ id: `machine:${i}`, height: 24, fontSize: 11 })
+    if ((node.shortfall ?? 0) > 1e-7 || (node.idle ?? 0) > 0) rows.push({ id: 'extraction-warning', height: 20, fontSize: 11 })
   }
   return rows
 }

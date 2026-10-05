@@ -21,10 +21,12 @@ import type { EdgeProps, EdgeTypes, NodeProps, NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
 import { RecipePickerPage } from './RecipePickerPage.tsx'
-import type { RecipeGraphNode } from '../plan/graph.ts'
+import { ResourceSettingsPage, ExtractionWarning } from './ResourceSettingsPage.tsx'
+import { resourceExtractionText } from '../i18n/resource-extraction.ts'
+import type { RecipeGraphNode, SourceGraphNode } from '../plan/graph.ts'
 import { buildPlanGraph } from '../plan/graph.ts'
 import { filterPowerFromGraph, findPowerOnlySteps } from '../plan/power-filter.ts'
-import type { Solution } from '../solver/index.ts'
+import type { ExtractionPlan, Solution } from '../solver/index.ts'
 import { recipePickerText } from '../i18n/recipe-picker.ts'
 import { useLocale } from '../i18n/index.ts'
 import {
@@ -47,8 +49,6 @@ import type {
   SourceFlowNode,
 } from './flow-layout.ts'
 import {
-  fmtCount,
-  fmtPercent,
   fmtPower,
   fmtPowerRange,
   fmtRate,
@@ -63,6 +63,7 @@ import { T } from './text.ts'
 
 type Props = {
   solution: Solution
+  extraction?: ExtractionPlan | null
   /** 物流の本数換算に使うベルト（Belt.id） */
   beltId?: string
   /** 物流の本数換算に使うパイプ（Pipe.id） */
@@ -74,6 +75,7 @@ type Props = {
 
 export default function FlowChart({
   solution,
+  extraction,
   beltId,
   pipeId,
   hidePower = false,
@@ -85,12 +87,13 @@ export default function FlowChart({
   const filter = useMemo(() => findPowerOnlySteps(solution), [solution])
   const hiding = hidePower && canFilterPower
   const graph = useMemo(() => {
-    const full = buildPlanGraph(solution, { beltId, pipeId, locale, namePack })
+    const full = buildPlanGraph(solution, { beltId, pipeId, locale, namePack, extraction })
     return hiding ? filterPowerFromGraph(full, filter) : full
-  }, [solution, beltId, pipeId, locale, namePack, hiding, filter])
+  }, [solution, extraction, beltId, pipeId, locale, namePack, hiding, filter])
   const [layout, setLayout] = useState<PlanFlowLayout | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [editingNode, setEditingNode] = useState<RecipeGraphNode | null>(null)
+  const [editingSource, setEditingSource] = useState<SourceGraphNode | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
 
   useEffect(() => {
@@ -142,7 +145,8 @@ export default function FlowChart({
         {expanded ? recipePickerText(locale).collapse : recipePickerText(locale).expand}
       </button>
       <ReactFlow<PlanFlowNode, PlanFlowEdge>
-        nodes={layout.nodes.map((node) => node.type === NODE_TYPE.recipe ? { ...node, data: { ...node.data, onOpen: setEditingNode } } : node)}
+        nodes={layout.nodes.map((node) => node.type === NODE_TYPE.recipe ? { ...node, data: { ...node.data, onOpen: setEditingNode } }
+          : node.type === NODE_TYPE.source ? { ...node, data: { ...node.data, onOpen: setEditingSource } } : node)}
         edges={layout.edges}
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
@@ -210,6 +214,7 @@ export default function FlowChart({
         </Panel>
       </ReactFlow>
       {editingNode && <RecipePickerPage node={editingNode} onClose={() => setEditingNode(null)} />}
+      {editingSource && <ResourceSettingsPage node={editingSource} onClose={() => setEditingSource(null)} />}
     </div>,
   )
 }
@@ -221,9 +226,15 @@ export default function FlowChart({
 /** 原料供給（採掘 / 既保有アイテムの持ち込み）。 */
 function SourceNode({ data }: NodeProps<SourceFlowNode>) {
   const node = data.node
+  const { locale } = useLocale()
+  const P = resourceExtractionText(locale)
   // 既保有は採掘と意味が違う（マップの上限に関係しない）ので枠の色と種別ラベルで分ける
   return (
-    <div className={`flow-node ${node.external ? 'flow-node--external' : 'flow-node--source'}`}>
+    <div className={`flow-node ${node.external ? 'flow-node--external' : 'flow-node--source'}`}
+      role={node.external ? undefined : 'button'} tabIndex={node.external ? undefined : 0}
+      aria-label={node.external ? undefined : `${P.title}：${node.itemName}`}
+      onClick={() => { if (!node.external) data.onOpen?.(node) }}
+      onKeyDown={event => { if (!node.external && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); data.onOpen?.(node) } }}>
       <p className="flow-node__kind">
         <ItemIcon id={node.item} name={node.itemName} size={NODE_METRICS.iconSize} />
         <span>{node.external ? T.flow.external : T.flow.source}</span>
@@ -232,6 +243,10 @@ function SourceNode({ data }: NodeProps<SourceFlowNode>) {
       <p className="flow-node__rate num">
         {fmtRate(node.ratePerMin)} <span className="flow-node__unit">{itemUnit(node.item)}</span>
       </p>
+      {!node.external && <>{node.machines?.map((machine, index) => <p className="flow-node__machine" key={index}>
+        <span>{itemName(machine.extractorId)} {P.purityNames[machine.purity]} ({recipePickerText(locale).clock}{Number((machine.clock * 100).toFixed(2))}%)</span>
+        <span className="num">{fmtRate(machine.required)} / {fmtRate(machine.maximum)}</span></p>)}
+        <ExtractionWarning shortfall={node.shortfall ?? 0} idle={node.idle ?? 0} /></>}
       <Handle id={resourcePortId(node.id, 'out', node.item)} type="source" position={Position.Right} isConnectable={false} />
     </div>
   )
@@ -266,11 +281,9 @@ function RecipeNode({ data }: NodeProps<RecipeFlowNode>) {
         {node.recipeName}
       </p>
       <p className="flow-node__meta">
-        {node.buildingName}{T.flow.metaSeparator}
-        {T.flow.machines(node.buildingCount, fmtPercent(node.clock))}
+        {node.buildingName} {P.count(node.buildingCount)} ({P.clock}{Number((node.clock * 100).toFixed(2))}%)
       </p>
       <p className="flow-node__meta">
-        {T.flow.machineEquivalent(fmtCount(node.machineCount))}{T.flow.metaSeparator}
         {/* 発電機は電力を消費しない。代わりに発電量を出す（電力のエッジは張らない） */}
         {node.powerProductionMW > 0 ? (
           T.flow.powerProduction(fmtPower(node.powerProductionMW))
@@ -303,7 +316,7 @@ function RecipeNode({ data }: NodeProps<RecipeFlowNode>) {
           <li className="flow-node__colhead">{T.flow.outputs}</li>
           {node.outputs.map((flow) => (
             <li key={flow.item} data-resource-item={flow.item}>
-              <FlowRate item={flow.item} ratePerMin={flow.ratePerMin} />
+              <FlowRate item={flow.item} ratePerMin={flow.ratePerMin} singleOutputLimit={flow.singleOutputLimit} />
             </li>
           ))}
         </ul>
@@ -320,8 +333,6 @@ function RecipeNode({ data }: NodeProps<RecipeFlowNode>) {
 
 /** 最終出力（目標産出 / 副産物）。 */
 function OutputNode({ data }: NodeProps<OutputFlowNode>) {
-  const { locale } = useLocale()
-  const P = recipePickerText(locale)
   const node = data.node
   return (
     <div className={`flow-node flow-node--output${node.isTarget ? ' flow-node--target' : ''}`}>
@@ -336,23 +347,20 @@ function OutputNode({ data }: NodeProps<OutputFlowNode>) {
       {node.requestedPerMin !== undefined && (
         <p className="flow-node__meta num">{T.flow.requested(fmtRate(node.requestedPerMin))}</p>
       )}
-      {node.maxSingleOutputPerMin !== undefined && (
-        <p className="flow-node__capacity num" title={P.maximumHelp}>
-          <span>{P.singleMaximum}</span>
-          <strong>{fmtRate(node.maxSingleOutputPerMin)} <span className="flow-node__unit">{itemUnit(node.item)}</span></strong>
-        </p>
-      )}
       <Handle id={resourcePortId(node.id, 'in', node.item)} type="target" position={Position.Left} isConnectable={false} />
     </div>
   )
 }
 
-function FlowRate({ item, ratePerMin }: { item: string; ratePerMin: number }) {
+function FlowRate({ item, ratePerMin, singleOutputLimit }: { item: string; ratePerMin: number; singleOutputLimit?: number }) {
+  const { locale } = useLocale()
+  const P = recipePickerText(locale)
   return (
     <>
       <ItemIcon id={item} name={itemName(item)} size={24} />
       <span className="flow-node__item" title={itemName(item)}>{itemName(item)}</span>
       <span className="flow-node__num num">{fmtRate(ratePerMin)}</span>
+      {singleOutputLimit !== undefined && <span className="flow-node__output-limit num">{P.limit} {fmtRate(singleOutputLimit)}</span>}
     </>
   )
 }

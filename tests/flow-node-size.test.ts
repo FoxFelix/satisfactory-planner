@@ -97,7 +97,7 @@ describe('ノードの高さ', () => {
     )
     expect(target).toBeDefined()
     const rows = nodeRows(target!).map((row) => row.id)
-    expect(rows).toEqual(['kind', 'title', 'rate', 'meta:requested', 'rate:single-max'])
+    expect(rows).toEqual(['kind', 'title', 'rate', 'meta:requested'])
   })
 
   it('データ中でいちばん長い名前でも上限行数に収まる', () => {

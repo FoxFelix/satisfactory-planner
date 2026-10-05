@@ -211,15 +211,16 @@ describe('結果テーブルのアイテム名リンク', () => {
     },
   )
 
-  it.each(SUPPORTED_LOCALES)('%s: resource name expands settings without a navigation link', async (locale) => {
+  it.each(SUPPORTED_LOCALES)('%s: resource name links to its item page without an arrow', async (locale) => {
     const container = await render(
       <ResourcesTable solution={ironPlate60} extraction={null} />,
       locale,
     )
     const oreLinks = links(container, ironOrePath(locale))
 
-    expect(oreLinks).toHaveLength(0)
-    expect(container.querySelector('.resource-row__toggle')?.textContent).toContain(officialName('Desc_OreIron_C', locale))
+    expect(oreLinks).toHaveLength(1)
+    expect(oreLinks[0]?.textContent).toBe(officialName('Desc_OreIron_C', locale))
+    expect(container.querySelector('a .item-icon')).toBeNull()
   })
 
   it.each(SUPPORTED_LOCALES)('%s: アイテム収支表のアイテム名がリンクになる', async (locale) => {

@@ -455,7 +455,7 @@ export const zhHant = {
     heading: '資源與開採',
     empty: '未使用原始資源',
     item: '資源',
-    required: '所需速率',
+    required: '所需產能',
     limit: '地圖上限',
     usage: '上限使用率',
     extractor: '開採設備',
@@ -466,7 +466,7 @@ export const zhHant = {
     clockNote: (percent: string): string => `以開採時脈 ${percent} 計算`,
     pressurizer: '{{Build_FrackingSmasher_C}}',
     shortfall: '節點不足',
-    shortfallNote: (n: string): string => `地圖上的節點無法提供所需速率中的 ${n}`,
+    shortfallNote: (n: string): string => `地圖上的節點無法提供所需產能中的 ${n}`,
     purity: {
       pure: '高純度',
       normal: '普通',

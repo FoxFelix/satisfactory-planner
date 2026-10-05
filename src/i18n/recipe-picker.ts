@@ -1,4 +1,5 @@
 const zh = {
+  limit: '上限', clock: '時脈', count: (n: number) => `${n}台`,
   singleMaximum: '單台最大（100%）', maximumHelp: '目前使用配方的單台機器基準產量，不含超頻與薩莫斯環增幅。多個配方同時生產時顯示其中最高值。',
   expand: '展開流程圖 ⛶', collapse: '返回標準檢視 ×',
   help: '點擊配方節點可比較與替換配方；箭頭對齊各資源列。', open: '比較與替換配方：',
@@ -13,6 +14,7 @@ const zh = {
   busy: '計算中…', useCurrent: '使用目前配方', choose: '選擇此配方 →',
 }
 const en: typeof zh = {
+  limit: 'Max', clock: 'Clock ', count: (n: number) => `${n} machines`,
   singleMaximum: 'Single-machine max (100%)', maximumHelp: 'Baseline output of one machine using the active recipe, without overclocking or Somersloops. For multiple active recipes, shows the highest rate.',
   expand: 'Expand flow chart ⛶', collapse: 'Return to normal view ×',
   help: 'Click a recipe to compare and replace it. Arrows connect to each resource row.', open: 'Compare and replace recipe: ',

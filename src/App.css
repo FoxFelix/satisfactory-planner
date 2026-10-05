@@ -2454,3 +2454,25 @@
 .resource-setting__stats { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
 .resource-node-group { padding: 16px 0 4px; display: grid; gap: 12px; }
 .resource-setting__body > .button { align-self: start; }
+.flow-node__output-limit { color: var(--text-muted); font-size: 10px; flex: 0 0 auto; white-space: nowrap; margin-left: 4px; }
+.flow-node--source[role="button"] { cursor: pointer; }
+.flow-node--source[role="button"]:hover, .flow-node--source[role="button"]:focus-visible { border-color: var(--accent); }
+.flow-node__machine { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; line-height: 24px; white-space: nowrap; }
+.flow-node__machine > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.flow-node__machine > .num { flex: 0 0 auto; }
+.extraction-warning { font-size: 11px; line-height: 20px; margin: 0; }
+.extraction-warning--danger { color: #ff8585; }
+.extraction-warning--idle { color: #f4c568; }
+.resource-settings-page { max-width: 900px; height: auto; max-height: 92dvh; }
+.resource-settings-summary { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.resource-settings-summary > span { color: var(--text-muted); font-size: 12px; }
+.resource-settings-page .extraction-warning { font-size: 14px; line-height: 24px; }
+.resource-settings-page .resource-node-group { display: flex; gap: 16px; align-items: end; }
+.resource-settings-page .resource-setting__fields { flex: 1; }
+.table.resources-table th, .table.resources-table td { text-align: center; }
+.table.resources-table thead th:first-child, .table.resources-table tbody th[scope="row"] { text-align: left; }
+.resource-settings-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 650px) {
+  .resource-settings-page .resource-node-group { align-items: stretch; flex-direction: column; gap: 8px; }
+  .resource-settings-page .resource-setting__fields { grid-template-columns: 1fr; }
+}

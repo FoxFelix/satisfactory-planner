@@ -1,7 +1,5 @@
 import { useLocale } from '../i18n/index.ts'
-import { useState } from 'react'
 import { resourceExtractionText } from '../i18n/resource-extraction.ts'
-import { ResourceExtractionEditor } from './ResourceExtractionEditor.tsx'
 import { usePlanner } from '../store/planner.ts'
 /** 原料表: 必要レート・マップ上限比率・採掘機台数・純度別ノード数。 */
 import type { ExtractionPlan, ExtractorGroup, ResourceExtraction, Solution } from '../solver/index.ts'
@@ -14,7 +12,7 @@ import {
   fmtRate,
   itemName,
 } from './format.ts'
-import { ItemIcon } from './ItemIcon.tsx'
+import { ItemIcon, ItemNameLink } from './ItemIcon.tsx'
 import { T } from './text.ts'
 
 type Props = {
@@ -46,7 +44,7 @@ export function ResourcesTable({ solution, extraction }: Props) {
       )}
       <section className="card card--wide">
         <div className="table-scroll table-scroll--wide">
-          <table className="table">
+          <table className="table resources-table">
           <thead>
             <tr>
               <th scope="col">{T.resources.item}</th>
@@ -55,9 +53,8 @@ export function ResourcesTable({ solution, extraction }: Props) {
               <th scope="col" className="num">{T.resources.usage}</th>
               <th scope="col">{T.resources.extractor}</th>
               <th scope="col" className="num">{T.resources.machines}</th>
-              <th scope="col">{T.resources.nodes}</th>
               {showShards && <th scope="col" className="num">{T.resources.shards}</th>}
-              <th scope="col" className="num">{T.resources.power}</th>
+              <th scope="col" className="num resource-table__power">{T.resources.power}</th>
             </tr>
           </thead>
           <tbody>
@@ -108,17 +105,11 @@ function ResourceRows({
   span,
   showShards,
 }: RowsProps) {
-  const [expanded, setExpanded] = useState(false)
-  const settingId = `resource-settings-${item}`
   const head = (
     <>
       <th scope="row" rowSpan={span}>
         <div className="resource-row__name">
-          <button type="button" className="resource-row__toggle" aria-expanded={expanded}
-            aria-controls={settingId} onClick={() => setExpanded(value => !value)}>
-            <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
-            <ItemIcon id={item} name={itemName(item)} /><span>{itemName(item)}</span>
-          </button>
+          <ItemIcon id={item} name={itemName(item)} /><ItemNameLink id={item}>{itemName(item)}</ItemNameLink>
         </div>
       </th>
       <td className="num" rowSpan={span}>
@@ -137,8 +128,8 @@ function ResourceRows({
     <>
       {groups.length === 0 && <tr>
         {head}
-        <td colSpan={showShards ? 4 : 3}>—</td>
-        <td className="num">{fmtPower(plan?.powerMW ?? 0)}</td>
+        <td colSpan={showShards ? 3 : 2}>—</td>
+        <td className="num resource-table__power">{fmtPower(plan?.powerMW ?? 0)}</td>
       </tr>}
       {groups.map((group, index) => (
         <tr key={group.id ?? `${group.extractorId}:${index}`}>
@@ -157,35 +148,10 @@ function ResourceRows({
               fmtInt(group.buildingCount),
             )}
           </td>
-          <td>{nodeBreakdown(group)}</td>
           {showShards && <td className="num">{fmtInt(group.powerShards)}</td>}
-          <td className="num">{fmtPower(group.powerMW + (group.pressurizerPowerMW ?? 0))}</td>
+          <td className="num resource-table__power">{fmtPower(group.powerMW + (group.pressurizerPowerMW ?? 0))}</td>
         </tr>
       ))}
-      {expanded && <tr className="resource-settings-row" id={settingId}>
-        <td colSpan={showShards ? 9 : 8}>
-          <ResourceExtractionEditor item={item} required={ratePerMin} plan={plan} />
-        </td>
-      </tr>}
     </>
-  )
-}
-
-function nodeBreakdown(group: ExtractorGroup) {
-  if (group.assignments.length === 0) return '—'
-  if (group.assignments.some((a) => !Number.isFinite(a.availableNodes))) {
-    return <span className="unit">{T.resources.unlimitedNodes}</span>
-  }
-  return (
-    <ul className="flow-list">
-      {group.assignments.map((assignment) => (
-        <li key={assignment.purity}>
-          <span className="flow__name">{T.resources.purity[assignment.purity]}</span>
-          <span className="flow__rate num">
-            {T.resources.nodesOf(fmtCount(assignment.nodes), assignment.availableNodes)}
-          </span>
-        </li>
-      ))}
-    </ul>
   )
 }

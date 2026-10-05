@@ -29,7 +29,7 @@ it('uses only single-machine rows; add/remove and restore use current sidebar de
     await act(async () => usePlanner.setState({ extractionPurity: 'pure', extractionClock: 1.5 }))
     expect(usePlanner.getState().extractionOverrides[iron].nodes![0].purity).toBe('normal')
     await act(async () => button('Restore defaults').click())
-    expect(usePlanner.getState().extractionOverrides[iron].nodes).toEqual([{ ...node, purity: 'pure', clock: 1.5 }])
+    expect(usePlanner.getState().extractionOverrides[iron]).toBeUndefined()
   } finally {
     await act(async () => root.unmount())
     cancelPendingSolve()

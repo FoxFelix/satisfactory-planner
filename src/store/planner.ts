@@ -1,5 +1,4 @@
 import { normalizeExtractionOverrides } from '../solver/extraction.ts'
-import { materializeExtractionNodes } from '../plan/extraction-nodes.ts'
 import type { ExtractionOverrides, ResourceExtractionOverride } from '../solver/extraction.ts'
 /**
  * 画面の状態（入力・解）を持つストア。
@@ -531,7 +530,7 @@ export const usePlanner = create<PlannerState>((set, get) => {
         const enabledAlternates = { ...state.enabledAlternates }
         if (recipe.isAlternate) enabledAlternates[recipeId] = true
         const options = { minerId: state.minerId, clock: state.extractionClock, purity: state.extractionPurity, overrides: state.extractionOverrides, beltId: state.beltId, pipeId: state.pipeId }
-        const extractionOverrides = materializeExtractionNodes(result, options)
+        const extractionOverrides = state.extractionOverrides
         set({ recipeSelections: candidate.recipeSelections, enabledAlternates, result, extractionOverrides,
           extraction: planExtraction(result, { ...options, overrides: extractionOverrides }),
           loadedTemplateId: null, status: 'done', error: null, elapsedMs: performance.now() - startedAt })
@@ -689,7 +688,7 @@ export const usePlanner = create<PlannerState>((set, get) => {
         if (id !== runId) return // 新しい入力が来ているので捨てる
         const options = { minerId: get().minerId, clock: get().extractionClock, purity: get().extractionPurity,
           overrides: get().extractionOverrides, beltId: get().beltId, pipeId: get().pipeId }
-        const extractionOverrides = result.status === 'optimal' ? materializeExtractionNodes(result, options) : get().extractionOverrides
+        const extractionOverrides = get().extractionOverrides
         const extraction = result.status === 'optimal' ? planExtraction(result, { ...options, overrides: extractionOverrides }) : null
         set({
           status: 'done',

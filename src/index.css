@@ -303,7 +303,7 @@ ul {
   border-color: var(--accent);
 }
 
-/* The application owns scrolling inside the viewport. */
+/* The application owns scrolling, including when embedded in Sites. */
 html, body, #root {
   width: 100%;
   height: 100%;
